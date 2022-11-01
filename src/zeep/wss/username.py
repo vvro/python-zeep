@@ -1,7 +1,10 @@
 import base64
 import hashlib
 import os
-from Crypto.Cipher import AES
+from Crypto.Cipher import AES, PKCS1_v1_5
+from Crypto.PublicKey import RSA
+from Crypto.Util.Padding import pad
+
 
 from zeep import ns
 from zeep.wss import utils
@@ -44,6 +47,7 @@ tAh6HE31968/9TKcDCu2TVKLNYxTpLM9elSNNl2ZT0zgS3OK5JoJt+Hb/M//lRAUhpeT/tNNcX9p
         timestamp_token=None,
         zulu_timestamp=None,
         hash_password=None,
+        rsa=None,
     ):
         """
         Some SOAP services want zulu timestamps with Z in timestamps and
@@ -59,6 +63,7 @@ tAh6HE31968/9TKcDCu2TVKLNYxTpLM9elSNNl2ZT0zgS3OK5JoJt+Hb/M//lRAUhpeT/tNNcX9p
         self.timestamp_token = timestamp_token
         self.zulu_timestamp = zulu_timestamp
         self.hash_password = hash_password
+        self.rsa = rsa
 
     def apply(self, envelope, headers):
         security = utils.get_security_header(envelope)
@@ -84,15 +89,15 @@ tAh6HE31968/9TKcDCu2TVKLNYxTpLM9elSNNl2ZT0zgS3OK5JoJt+Hb/M//lRAUhpeT/tNNcX9p
         token.extend(elements)
         return envelope, headers
     
-    block_size=16
-    pad = lambda s: s + (block_size - len(s) % block_size) * chr(block_size - len(s) % block_size)
+    
 
     def encrypt(self,plainText,key):
-    
+        block_size=16
+        
         aes = AES.new(key, AES.MODE_ECB)    
-        encrypt_aes = aes.encrypt(self.pad(plainText))   
-        encrypted_text = str(base64.encodebytes (encrypt_aes), encoding = 'utf-8')
-        return encrypted_text
+        encrypt_aes = aes.encrypt(pad(plainText,block_size))
+        #encrypted_text = base64.b64encode(encrypt_aes).decode('utf-8')
+        return encrypt_aes
 
 
     def verify(self, envelope):
@@ -118,19 +123,35 @@ tAh6HE31968/9TKcDCu2TVKLNYxTpLM9elSNNl2ZT0zgS3OK5JoJt+Hb/M//lRAUhpeT/tNNcX9p
             password = self.password
 
         # digest = Base64 ( SHA-1 ( nonce + created + password ) )
+        pass_digest = base64.b64encode(
+                hashlib.sha1(
+                    nonce + timestamp.encode("utf-8") + password
+                ).digest()
+            )
         if not self.password_digest and self.hash_password:
             digest = self.encrypt(password,nonce)
         elif not self.password_digest:
-            digest = self.encrypt(password, nonce)
+            digest = self.encrypt(password,nonce)
         else:
-            digest = self.password_digest
-
-        return [
+            digest = self.encrypt(password,nonce)
+            
+        if self.rsa:
+            key = RSA.importKey(open(self.rsa,'r').read())
+            cipher = PKCS1_v1_5.new(key)
+            
+            etimestamp = self.encrypt(timestamp.encode('utf-8'),nonce)
+            edigest = self.encrypt(pass_digest,nonce)
+            nonce = cipher.encrypt(nonce)          
+            return [
             utils.WSS.Password(
-                digest
+                base64.b64encode(digest).decode('utf-8'), 
+                Digest = base64.b64encode(edigest).decode('utf-8')
             ),
             utils.WSS.Nonce(
-                base64.b64encode(nonce).decode("utf-8")
+                base64.b64encode(nonce).decode('utf-8')
             ),
-            utils.WSS.Created(timestamp),
+            utils.WSS.Created(
+                timestamp
+                #timestamp
+                ),
         ]
