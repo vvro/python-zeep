@@ -40,6 +40,7 @@ class Client:
 
     :param wsdl:
     :param wsse:
+    :param wss: WSSecurity object
     :param transport: Custom transport class.
     :param service_name: The service name for the service binding. Defaults to
                          the first service in the WSDL document.
@@ -57,6 +58,7 @@ class Client:
         self,
         wsdl,
         wsse=None,
+        wss=None,
         transport=None,
         service_name=None,
         port_name=None,
@@ -72,6 +74,7 @@ class Client:
         )
         self.wsdl = Document(wsdl, self.transport, settings=self.settings)
         self.wsse = wsse
+        self.wss = wss
         self.plugins = plugins if plugins is not None else []
 
         self._default_service = None
