@@ -1,9 +1,12 @@
 import base64
 import hashlib
 import os
+from Crypto.Cipher import AES
 
 from zeep import ns
 from zeep.wss import utils
+
+block_size=16
 
 
 class UsernameToken:
@@ -80,6 +83,17 @@ tAh6HE31968/9TKcDCu2TVKLNYxTpLM9elSNNl2ZT0zgS3OK5JoJt+Hb/M//lRAUhpeT/tNNcX9p
 
         token.extend(elements)
         return envelope, headers
+    
+    block_size=16
+    pad = lambda s: s + (block_size - len(s) % block_size) * chr(block_size - len(s) % block_size)
+
+    def encrypt(self,plainText,key):
+    
+        aes = AES.new(key, AES.MODE_ECB)    
+        encrypt_aes = aes.encrypt(self.pad(plainText))   
+        encrypted_text = str(base64.encodebytes (encrypt_aes), encoding = 'utf-8')
+        return encrypted_text
+
 
     def verify(self, envelope):
         pass
@@ -105,15 +119,9 @@ tAh6HE31968/9TKcDCu2TVKLNYxTpLM9elSNNl2ZT0zgS3OK5JoJt+Hb/M//lRAUhpeT/tNNcX9p
 
         # digest = Base64 ( SHA-1 ( nonce + created + password ) )
         if not self.password_digest and self.hash_password:
-            digest = base64.b64encode(
-                hashlib.sha1(
-                    nonce + timestamp.encode("utf-8") + hashlib.sha1(password).digest()
-                ).digest()
-            ).decode("ascii")
+            digest = self.encrypt(password,nonce)
         elif not self.password_digest:
-            digest = base64.b64encode(
-                hashlib.sha1(nonce + timestamp.encode("utf-8") + password).digest()
-            ).decode("ascii")
+            digest = self.encrypt(password, nonce)
         else:
             digest = self.password_digest
 
